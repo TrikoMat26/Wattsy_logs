@@ -1,0 +1,13 @@
+# Logs sources
+ELISA_Prod_Log*.txt
+Archive/
+
+# Résultats générés
+Inventaire_*.txt
+Historique_*.txt
+[0-9]*.txt
+
+# Système
+umbs.ini
+Desktop.ini
+.DS_Store
