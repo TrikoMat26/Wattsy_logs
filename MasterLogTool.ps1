@@ -34,11 +34,11 @@ Function Clean-Serial($val) {
 # Fonction unifiée d'extraction du SN (Supporte Ancien format # et Nouveau format :)
 Function Extract-SN($line) {
     # Ancien format: ... Datamatrix: #2025#13104 ...
-    if ($line -match "Datamatrix[:\s]*#.*?#(.*?)($|\s|#|===)") {
+    if ($line -match "Datamatrix[:\s]*#.*?#(\d+)") {
         return Clean-Serial $matches[1]
     }
-    # Nouveau format: ... Datamatrix: 043355 ===
-    elseif ($line -match "Datamatrix[:\s]*(\w+)") {
+    # Nouveau format: ... Datamatrix: 043355 === (chiffres uniquement, pas d'URL)
+    elseif ($line -match "Datamatrix[:\s]*(\d+)") {
         return Clean-Serial $matches[1]
     }
     return ""
@@ -56,11 +56,12 @@ Function Get-LogFiles {
     return Get-ChildItem -Path $ScriptPath -Filter "ELISA_Prod_Log*.txt" | Sort-Object Name
 }
 
-# Fonction générique d'écriture de fichier (Gère les erreurs de verrouillage)
+# Fonction générique d'écriture de fichier (UTF-8 sans BOM pour les accents)
 Function Write-ReportFile($path, $content) {
     try {
-        # On utilise StreamWriter pour forcer l'encodage ANSI et éviter le BOM UTF-8 qui pourrait gêner
-        $sw = New-Object System.IO.StreamWriter($path, $false, $EncANSI)
+        # UTF-8 sans BOM préserve les accents et est compatible avec Notepad/VS Code
+        $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+        $sw = New-Object System.IO.StreamWriter($path, $false, $utf8NoBom)
         $sw.Write($content)
         $sw.Close()
         return $true
@@ -288,6 +289,20 @@ Function Run-InventaireSeriesOK {
         }
     }
     if (-not $hasCross) { [void]$sb.AppendLine("Aucun.") }
+
+    # Section Liste Globale Confondus
+    [void]$sb.AppendLine()
+    [void]$sb.AppendLine("#" * 80)
+    [void]$sb.AppendLine("LISTE GLOBALE DES SN OK (CONFONDUS - TOUS FICHIERS)")
+    [void]$sb.AppendLine("#" * 80)
+    [void]$sb.AppendLine()
+    
+    $allUniqueSN = $globalOverview.Keys | Sort-Object
+    [void]$sb.AppendLine("Nombre total de SN uniques OK : $($allUniqueSN.Count)")
+    [void]$sb.AppendLine()
+    [void]$sb.AppendLine("Liste triée par ordre croissant :")
+    [void]$sb.AppendLine(($allUniqueSN -join ", "))
+    [void]$sb.AppendLine()
 
     $outPath = Join-Path $ScriptPath "Inventaire_Series_OK.txt"
     Write-ReportFile $outPath (Sanitize-Text $sb.ToString())
