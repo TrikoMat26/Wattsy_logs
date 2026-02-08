@@ -48,7 +48,8 @@ Le script doit supporter **simultanément** les deux formats de logs existants :
 - **Priorité** : Si un bloc contient à la fois OK et ERROR (rare), ERROR prévaut généralement, ou l'ordre chronologique. Dans nos scripts : OK prévaut si présent, sauf si ERROR est explicite.
 - **Incomplet** : Si aucun marqueur n'est trouvé avant la fin du bloc.
 
-## 6. Historique des Bugs Résolus
+## 6. Historique des Bugs Résolus (Analyse)
+
 | Erreur | Contexte | Solution |
 | :--- | :--- | :--- |
 | Caractères chinois (lecture) | VBS/PS | Forcer l'encodage ANSI-1252 à l'ouverture du fichier |
@@ -57,4 +58,32 @@ Le script doit supporter **simultanément** les deux formats de logs existants :
 | SN vide / non reconnu | Format 2026 | Adapter l'extraction pour supporter le format sans `#` |
 | Bouton GUI caché | PowerShell | Désactiver le wrapping automatique (`WrapContents = $false`) |
 | Accents corrompus (◇) | PS écriture ANSI | Passer à UTF-8 sans BOM pour l'écriture |
-| "https" dans liste SN | URLs scannées | Regex `\d+` au lieu de `\w+` pour n'accepter que les chiffres | |
+| "https" dans liste SN | URLs scannées | Regex `\d+` au lieu de `\w+` pour n'accepter que les chiffres |
+
+## 7. Gestion et Automatisation (SFTP & RTC)
+
+Pour le script de gestion (`_Gestion_Logs_Wattsy_Auto.ps1`), les règles suivantes s'appliquent :
+
+### SFTP & WinSCP
+- **WinSCP Portable** : Toujours utiliser `WinSCP.com` (CLI) avec `/ini=nul` pour éviter toute écriture dans le registre Windows.
+- **Fingerprint** : Le fingerprint SSH doit être passé explicitement via le switch `-hostkey`.
+- **Parsing des Sorties** : WinSCP injecte des lignes parasites (`batch abort`, etc.). Toujours utiliser des balises (ex: `echo __COUNT__`) pour isoler les données à parser en PowerShell.
+
+### Intégrité des Données (Téléchargement)
+- **Phase 1 (Sync)** : Utiliser `synchronize local` pour un transfert rapide des fichiers nouveaux ou modifiés.
+- **Phase 2 (MD5)** : Vérifier systématiquement le contenu via `md5sum` sur le Pi et `Get-FileHash` sur le PC. Retélécharger si les hashs divergent.
+
+### Gestion RTC (Module DS3231)
+- **Lecture** : Exécuter le script existant sur le Pi (`test_rtc_2.py`).
+- **Écriture** : Utiliser `python3 -c` avec une construction robuste pour injecter les octets BCD dans le bus I2C (adresse 0x68).
+- **Reboot** : Un `sudo -n reboot` est recommandé après mise à jour du RTC.
+
+## 8. Historique des Bugs Résolus (Gestion)
+
+| Erreur | Contexte | Solution |
+| :--- | :--- | :--- |
+| `Unknown switch 'overwrite'` | WinSCP `get` | Supprimer le fichier local avant le `get` pour forcer l'écrasement. |
+| Timeouts MD5 (>15s) | WinSCP `hash-list` | Utiliser la commande native Linux `md5sum` sur le Pi. |
+| `SyntaxError` Python | RTC injection | Assurer que le code Python envoyé via `python -c` est mono-ligne. |
+| Menu bloqué ou 0 ignoré | PowerShell Switch | Utiliser un label de boucle (ex: `:MainLoop`) pour le `break`. |
+| Parsing "batch" en Int | Scan Logs | Utiliser des balises explicites (`__COUNT__`) pour le parsing. |

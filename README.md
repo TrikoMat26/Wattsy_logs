@@ -5,6 +5,24 @@ Deux versions sont disponibles : une version moderne et unifiée en **PowerShell
 
 ---
 
+## 🚀 _Gestion_Logs_Wattsy_Auto.ps1 (Automatisation & SFTP)
+
+**Outil de synchronisation et de gestion.** Ce script permet de gérer les logs directement sur le Raspberry Pi de test et de les rapatrier sur le OneDrive local.
+
+### Fonctionnalités Clés
+- **Synchronisation SFTP** : Utilise WinSCP Portable pour télécharger les nouveaux logs du Pi vers le PC.
+- **Double Vérification (MD5)** : Garantit l'intégrité des fichiers après téléchargement.
+- **Gestion RTC** : Vérifie l'horloge du Pi par rapport au PC et permet de la synchroniser (mise à l'heure du module RTC DS3231).
+- **Archivage Distant** : Permet de déplacer les logs traités dans des sous-dossiers sur le Pi pour garder le dossier principal propre.
+- **Zéro Admin** : Conçu pour s'exécuter sans droits administrateur (WinSCP portable inclus).
+
+### Utilisation rapide
+1. Lancer le script (clic droit -> Exécuter avec PowerShell).
+2. Utiliser le menu interactif (1 à 4) pour scanner, télécharger ou archiver.
+3. Les journaux d'exécution sont stockés dans le dossier `_logs_exec`.
+
+---
+
 ## 🏆 MasterLogTool.ps1 (Version PowerShell Recommandée)
 
 **C'est l'outil principal à utiliser.** Il regroupe toutes les fonctionnalités des anciens scripts VBScript dans une interface graphique unique, avec des performances nettement supérieures.
