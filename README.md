@@ -1,7 +1,7 @@
-# Boîte à Outils d'Analyse de Logs ELISA
+# Boîte à Outils d'Analyse de Logs ELISA & Traçabilité Production
 
-Ce dossier contient les outils d'analyse pour les logs de production ELISA (`ELISA_Prod_Log_*.txt`).
-Deux versions sont disponibles : une version moderne et unifiée en **PowerShell (Recommandée)** et les anciens scripts individuels en **VBScript**.
+Ce dossier contient les outils d'analyse pour les logs de production ELISA (`ELISA_Prod_Log_*.txt`) ainsi qu'un outil de traçabilité par lots.
+Plusieurs outils PowerShell sont disponibles, ainsi que les anciens scripts individuels en **VBScript** (conservés pour référence).
 
 ---
 
@@ -48,6 +48,36 @@ L'interface propose 4 actions :
 
 ---
 
+## 📋 Liste_OF.ps1 (Segmentation par Lots / Traçabilité OF)
+
+**Outil de traçabilité production.** Analyse une liste de numéros de série validés (OK test) pour reconstituer des lots/ordres de fabrication (OF) et identifier les numéros manquants (cartes en panne ou numéros supprimés).
+
+### Fonctionnalités
+- **Parsing flexible** : Accepte des numéros séparés par virgules, espaces ou retours à la ligne.
+- **Déduplication & tri** : Élimine les doublons et trie numériquement.
+- **Segmentation intelligente** : Regroupe les numéros en plages continues selon un seuil d'écart configurable (`$GapThreshold`, défaut : 5).
+- **Détection des manquants** : Liste les numéros absents dans chaque plage.
+- **Préservation des zéros** : Conserve le format d'affichage original (ex : `043355`).
+
+### Format de Sortie
+```
+segment 1 : 043355–043544, present=188, missing=2 (043458, 043491)
+segment 2 : 099001–099010, present=10, missing=0
+```
+
+### Utilisation
+1. Placer `Liste_OF.txt` (liste brute de numéros) dans le même dossier que le script.
+2. Lancer : `powershell.exe -ExecutionPolicy Bypass -File .\Liste_OF.ps1`
+3. Le résultat est écrit dans `Liste_OF_traité.txt`.
+
+### Configuration
+- `$GapThreshold` (ligne 13) : Seuil d'écart pour couper un segment (défaut : 5).
+- `$Exclude` (ligne 14) : Tableau de numéros à exclure (ex : `@("043246")`).
+
+> ⚠️ **Statut** : Bug connu — la segmentation produit actuellement 1 segment par numéro au lieu de regrouper les plages continues. Correction en cours (P0).
+
+---
+
 ## 📂 Anciens Scripts (VBScript) - *Obsolètes mais fonctionnels*
 
 Ces scripts individuels réalisent les mêmes tâches mais sont plus lents et moins pratiques. Ils sont conservés pour référence.
@@ -78,6 +108,8 @@ Pour toute maintenance ou modification, se référer impérativement au fichier 
 - **Encodage :** Lecture en ANSI, Écriture en **UTF-8 sans BOM** (accents préservés).
 - **Nettoyage :** Suppression des octets nuls (`Chr(0)`) et trim strict des numéros de série.
 - **Filtrage SN :** Seuls les numéros **purement numériques** sont acceptés (les URLs sont ignorées).
-- **Format Datamatrix :** Les scripts supportent les deux formats :
+- **Format Datamatrix :** Les scripts d'analyse supportent les deux formats :
     - Ancien : `Datamatrix: #2025#SN`
     - Nouveau (2026+) : `Datamatrix: SN`
+- **Compatibilité PS 5.1 :** Les scripts PowerShell doivent rester compatibles Windows PowerShell 5.1 (pas de `??`, conversions explicites `[int]`).
+- **Segmentation OF :** Seuil d'écart configurable (`$GapThreshold`), préservation des zéros initiaux.

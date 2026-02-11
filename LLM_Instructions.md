@@ -1,6 +1,6 @@
-# Directives de Projet : Analyseur de Logs ELISA
+# Directives de Projet : Analyseur de Logs ELISA & Outils de Traçabilité
 
-Ce fichier définit les standards techniques et l'historique des résolutions pour garantir la performance et la stabilité des outils de traitement de logs (VBScript & PowerShell).
+Ce fichier définit les standards techniques et l'historique des résolutions pour garantir la performance et la stabilité des outils de traitement de logs (VBScript & PowerShell) et de traçabilité de production.
 
 ## 1. Encodage et Flux de Données (CRITIQUE)
 - **Standard Global** : Toujours utiliser le format **ANSI (Windows-1252)** pour la lecture et l'écriture.
@@ -87,3 +87,45 @@ Pour le script de gestion (`_Gestion_Logs_Wattsy_Auto.ps1`), les règles suivant
 | `SyntaxError` Python | RTC injection | Assurer que le code Python envoyé via `python -c` est mono-ligne. |
 | Menu bloqué ou 0 ignoré | PowerShell Switch | Utiliser un label de boucle (ex: `:MainLoop`) pour le `break`. |
 | Parsing "batch" en Int | Scan Logs | Utiliser des balises explicites (`__COUNT__`) pour le parsing. |
+
+## 9. Outil de Segmentation par Lots (Liste_OF.ps1)
+
+Script d'analyse de numéros de série validés (OK test) pour reconstituer des lots/OF et identifier les numéros manquants.
+
+### Flux de Données
+```
+Liste_OF.txt  -->  Liste_OF.ps1  -->  Liste_OF_traité.txt
+   (liste brute)    (parse/tri/        (segments + manquants)
+                     segmentation)
+```
+
+### Règles d'Implémentation (CRITIQUE)
+- **Compatibilité PS 5.1** : Ne pas utiliser d'opérateurs non supportés (`??`, etc.). Toujours utiliser des conversions explicites (`[int]`).
+- **Parsing** : Extraire les numéros via Regex `\d+` (numérique uniquement, cohérent avec §2).
+- **Déduplication** : Utiliser une hashtable `$widthMap` pour dédupliquer tout en conservant la largeur d'affichage maximale observée.
+- **Tri** : Tri numérique explicite (`Sort-Object { [int]$_ }`).
+- **Segmentation** : Nouveau segment si l'écart entre deux numéros consécutifs triés dépasse `$GapThreshold` (défaut : 5). La comparaison doit être `$gap -gt $GapThreshold` sur des scalaires `[int]`.
+- **Zéros initiaux** : Préserver l'affichage via une largeur par segment (max des largeurs observées dans le segment).
+- **Exclusions** : Tableau `$Exclude` en tête de script (par forme texte).
+- **Écriture** : UTF-8 via `Set-Content -Encoding UTF8`.
+- **Fichiers** : `Liste_OF.txt` (entrée) et `Liste_OF_traité.txt` (sortie) dans le même dossier que le script.
+
+### Format de Sortie Attendu
+```
+segment 1 : 043355–043544, present=188, missing=2 (043458, 043491)
+segment 2 : 099001–099010, present=10, missing=0
+```
+
+### Pièges PowerShell 5.1 Connus
+- Un tableau non vide dans un `if` est évalué `True` même si son contenu est `$false`.
+- `HashSet.ToArray()` peut échouer si la variable est écrasée en scalaire → préférer les hashtables.
+- Toujours forcer `,` (opérateur virgule) pour ajouter un sous-tableau à un tableau : `$segments += ,$current`.
+
+## 10. Historique des Bugs Résolus (Segmentation OF)
+
+| Erreur | Contexte | Solution |
+| :--- | :--- | :--- |
+| `Jeton inattendu '??'` | PS 5.1 incompatible | Remplacer `($s ?? "")` par `if ($null -eq $s) { "" } else { $s }` |
+| `System.Int32 ne contient pas ToArray()` | Variable écrasée en scalaire | Éviter `HashSet.ToArray()`, préférer hashtable + tri |
+| 1 segment par numéro | Condition de segmentation toujours vraie | S'assurer que `$gap` et `$GapThreshold` sont des `[int]` scalaires, et utiliser `-gt` |
+| Manquants non détectés | Effet secondaire du bug de segmentation | Corrigé par la correction de segmentation |
