@@ -37,7 +37,7 @@ Plusieurs outils PowerShell sont disponibles, ainsi que les anciens scripts indi
 L'interface propose 4 actions :
 1.  **Extraction par Liste** : Extrait les logs complets pour les produits listés dans `NumSerieKO.txt`.
 2.  **Inventaire Global** : Liste tous les numéros de série trouvés dans tous les logs.
-3.  **Inventaire Validés (OK)** : Liste les succès (`[PROD_OK]`), analyse les doublons, et génère une **liste globale confondus** de tous les SN OK uniques.
+3.  **Inventaire Validés (OK)** : Liste les succès (`[PROD_OK]`), analyse les doublons, génère une **liste globale confondus** de tous les SN OK uniques, puis effectue une **analyse par segments (lots/OF)** avec détection des numéros manquants.
 4.  **Historique Complet** : Trace tout l'historique de chaque produit (OK, Erreur précise, ou Incomplet).
 
 ### Utilisation-
@@ -48,24 +48,14 @@ L'interface propose 4 actions :
 
 ---
 
-## 📋 Liste_OF.ps1 (Segmentation par Lots / Traçabilité OF)
+## 📋 Liste_OF.ps1 (Segmentation par Lots — Script Autonome)
 
-**Outil de traçabilité production.** Analyse une liste de numéros de série validés (OK test) pour reconstituer des lots/ordres de fabrication (OF) et identifier les numéros manquants (cartes en panne ou numéros supprimés).
+**Version standalone** de l'analyse de segmentation. Peut être utilisé indépendamment de MasterLogTool pour analyser une liste brute de numéros de série depuis un fichier texte.
 
-### Fonctionnalités
-- **Parsing flexible** : Accepte des numéros séparés par virgules, espaces ou retours à la ligne.
-- **Déduplication & tri** : Élimine les doublons et trie numériquement.
-- **Segmentation intelligente** : Regroupe les numéros en plages continues selon un seuil d'écart configurable (`$GapThreshold`, défaut : 5).
-- **Détection des manquants** : Liste les numéros absents dans chaque plage.
-- **Préservation des zéros** : Conserve le format d'affichage original (ex : `043355`).
+> [!NOTE]
+> Cette logique de segmentation est **aussi intégrée dans MasterLogTool.ps1** (option 3 — Inventaire Validés). Pour un usage normal, préférer MasterLogTool.
 
-### Format de Sortie
-```
-segment 1 : 043355–043544, present=188, missing=2 (043458, 043491)
-segment 2 : 099001–099010, present=10, missing=0
-```
-
-### Utilisation
+### Utilisation autonome
 1. Placer `Liste_OF.txt` (liste brute de numéros) dans le même dossier que le script.
 2. Lancer : `powershell.exe -ExecutionPolicy Bypass -File .\Liste_OF.ps1`
 3. Le résultat est écrit dans `Liste_OF_traité.txt`.
@@ -73,8 +63,6 @@ segment 2 : 099001–099010, present=10, missing=0
 ### Configuration
 - `$GapThreshold` (ligne 13) : Seuil d'écart pour couper un segment (défaut : 5).
 - `$Exclude` (ligne 14) : Tableau de numéros à exclure (ex : `@("043246")`).
-
-> ⚠️ **Statut** : Bug connu — la segmentation produit actuellement 1 segment par numéro au lieu de regrouper les plages continues. Correction en cours (P0).
 
 ---
 

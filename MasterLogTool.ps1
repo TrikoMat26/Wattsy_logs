@@ -17,6 +17,7 @@ Add-Type -AssemblyName System.Drawing
 $ScriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 # Définition stricte de l'encodage ANSI (Windows-1252) pour éviter les "caractères chinois"
 $EncANSI = [System.Text.Encoding]::GetEncoding(1252)
+$GapThreshold = 5   # Seuil d'écart pour la segmentation par lots/OF
 
 # Fonction de nettoyage (Equivalent CleanSerial VBS)
 Function Clean-Serial($val) {
@@ -304,6 +305,102 @@ Function Run-InventaireSeriesOK {
     [void]$sb.AppendLine(($allUniqueSN -join ", "))
     [void]$sb.AppendLine()
 
+    # --- SEGMENTATION PAR LOTS / OF (issue de Liste_OF.ps1) ---
+    [void]$sb.AppendLine("#" * 80)
+    [void]$sb.AppendLine("ANALYSE PAR SEGMENTS (LOTS / OF)")
+    [void]$sb.AppendLine("Seuil d'ecart : $GapThreshold (nouveau segment si ecart > $GapThreshold)")
+    [void]$sb.AppendLine("#" * 80)
+    [void]$sb.AppendLine()
+
+    if ($allUniqueSN.Count -gt 0) {
+        # Construction widthMap : SN(int) -> largeur texte max observée
+        $widthMap = @{}
+        foreach ($s in $allUniqueSN) {
+            try { $n = [int]$s } catch { continue }
+            $len = $s.Length
+            if (-not $widthMap.ContainsKey($n)) {
+                $widthMap[$n] = $len
+            }
+            elseif ($len -gt [int]$widthMap[$n]) {
+                $widthMap[$n] = $len
+            }
+        }
+
+        # Tri numérique
+        $nums = $widthMap.Keys | Sort-Object { [int]$_ }
+
+        if ($nums -and $nums.Count -gt 0) {
+            # Segmentation
+            $segments = @()
+            $currentSeg = @($nums[0])
+
+            for ($i = 1; $i -lt $nums.Count; $i++) {
+                $prev = [int]$nums[$i - 1]
+                $cur = [int]$nums[$i]
+                $gap = $cur - $prev
+
+                if ($gap -gt $GapThreshold) {
+                    $segments += , $currentSeg
+                    $currentSeg = @($cur)
+                }
+                else {
+                    $currentSeg += $cur
+                }
+            }
+            $segments += , $currentSeg
+
+            # Fonction locale de formatage avec zéros
+            # (pas de Function imbriquée pour compatibilité PS 5.1)
+            $segId = 0
+            foreach ($seg in $segments) {
+                $segId++
+
+                $segStart = [int]$seg[0]
+                $segEnd = [int]$seg[$seg.Count - 1]
+                $presentCount = $seg.Count
+
+                # Largeur d'affichage du segment = max des largeurs observées
+                $segWidth = 0
+                foreach ($n in $seg) {
+                    $w = [int]$widthMap[[int]$n]
+                    if ($w -gt $segWidth) { $segWidth = $w }
+                }
+                if ($segWidth -lt 1) { $segWidth = 6 }
+
+                # Hashtable de présence
+                $present = @{}
+                foreach ($n in $seg) { $present[[int]$n] = $true }
+
+                # Calcul des manquants
+                $missing = @()
+                for ($n = $segStart; $n -le $segEnd; $n++) {
+                    if (-not $present.ContainsKey($n)) {
+                        $missing += $n.ToString("D$segWidth")
+                    }
+                }
+
+                $rangeStr = "{0} - {1}" -f $segStart.ToString("D$segWidth"), $segEnd.ToString("D$segWidth")
+
+                if ($missing.Count -gt 0) {
+                    [void]$sb.AppendLine(("segment {0} : {1}, present={2}, missing={3} ({4})" -f $segId, $rangeStr, $presentCount, $missing.Count, ($missing -join ", ")))
+                }
+                else {
+                    [void]$sb.AppendLine(("segment {0} : {1}, present={2}, missing=0" -f $segId, $rangeStr, $presentCount))
+                }
+            }
+
+            [void]$sb.AppendLine()
+            [void]$sb.AppendLine("Total : $($segments.Count) segment(s) detecte(s).")
+        }
+        else {
+            [void]$sb.AppendLine("Aucun numero exploitable pour la segmentation.")
+        }
+    }
+    else {
+        [void]$sb.AppendLine("Aucun SN OK trouve, segmentation impossible.")
+    }
+    [void]$sb.AppendLine()
+
     $outPath = Join-Path $ScriptPath "Inventaire_Series_OK.txt"
     Write-ReportFile $outPath (Sanitize-Text $sb.ToString())
     return "Terminé. Fichier généré : Inventaire_Series_OK.txt"
@@ -429,7 +526,7 @@ $PanelLeft.Controls.Add($rb2)
 $rb3 = New-Object Windows.Forms.RadioButton
 $rb3.Text = "3. Inventaire Validés (OK & Doublons)"
 $rb3.AutoSize = $true
-$rb3.Tag = "Desc: Liste uniquement les SN ayant réussi les tests ([PROD_OK]). Analyse détaillée des doublons (intra et inter-fichiers)."
+$rb3.Tag = "Desc: Liste les SN OK ([PROD_OK]), analyse les doublons, et effectue une segmentation par lots (Analyse OF) avec détection des manquants."
 $PanelLeft.Controls.Add($rb3)
 
 $rb4 = New-Object Windows.Forms.RadioButton

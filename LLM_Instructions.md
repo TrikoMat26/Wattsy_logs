@@ -88,9 +88,10 @@ Pour le script de gestion (`_Gestion_Logs_Wattsy_Auto.ps1`), les règles suivant
 | Menu bloqué ou 0 ignoré | PowerShell Switch | Utiliser un label de boucle (ex: `:MainLoop`) pour le `break`. |
 | Parsing "batch" en Int | Scan Logs | Utiliser des balises explicites (`__COUNT__`) pour le parsing. |
 
-## 9. Outil de Segmentation par Lots (Liste_OF.ps1)
+## 9. Segmentation par Lots / OF
 
-Script d'analyse de numéros de série validés (OK test) pour reconstituer des lots/OF et identifier les numéros manquants.
+Logique d'analyse de numéros de série validés (OK test) pour reconstituer des lots/OF et identifier les numéros manquants.
+**Intégrée dans** `MasterLogTool.ps1` (option 3 — Inventaire Validés OK), et aussi disponible en standalone via `Liste_OF.ps1`.
 
 ### Flux de Données
 ```
