@@ -574,22 +574,22 @@ $lblTitle.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.
 $PanelLeft.Controls.Add($lblTitle)
 
 $rb1 = New-Object Windows.Forms.RadioButton
-$rb1.Text = "1. Extraction par Liste (NumSerieKO)"
+$rb1.Text = "1. Inventaire Validés (OK & Doublons)"
 $rb1.AutoSize = $true
 $rb1.Checked = $true
-$rb1.Tag = "Desc: Extrait les logs complets pour chaque numéro de série présent dans 'NumSerieKO.txt'. Crée un fichier par SN."
+$rb1.Tag = "Desc: Liste les SN OK ([PROD_OK]), analyse les doublons, et effectue une segmentation par lots (Analyse OF) avec détection des manquants."
 $PanelLeft.Controls.Add($rb1)
 
 $rb2 = New-Object Windows.Forms.RadioButton
-$rb2.Text = "2. Inventaire Global (Tous)"
+$rb2.Text = "2. Extraction par Liste (NumSerieKO)"
 $rb2.AutoSize = $true
-$rb2.Tag = "Desc: Liste tous les numéros de série trouvés dans chaque fichier log, sans filtrage."
+$rb2.Tag = "Desc: Extrait les logs complets pour chaque numéro de série présent dans 'NumSerieKO.txt'. Crée un fichier par SN avec le défaut dans le nom."
 $PanelLeft.Controls.Add($rb2)
 
 $rb3 = New-Object Windows.Forms.RadioButton
-$rb3.Text = "3. Inventaire Validés (OK & Doublons)"
+$rb3.Text = "3. Inventaire Global (Tous)"
 $rb3.AutoSize = $true
-$rb3.Tag = "Desc: Liste les SN OK ([PROD_OK]), analyse les doublons, et effectue une segmentation par lots (Analyse OF) avec détection des manquants."
+$rb3.Tag = "Desc: Liste tous les numéros de série trouvés dans chaque fichier log, sans filtrage."
 $PanelLeft.Controls.Add($rb3)
 
 $rb4 = New-Object Windows.Forms.RadioButton
@@ -695,9 +695,9 @@ $btnRun.Add_Click({
 
         $res = ""
         try {
-            if ($rb1.Checked) { Log-Console "Script: Recherche KO..."; $res = Run-RechercheSerie }
-            elseif ($rb2.Checked) { Log-Console "Script: Inventaire..."; $res = Run-InventaireSeries }
-            elseif ($rb3.Checked) { Log-Console "Script: Inventaire OK..."; $res = Run-InventaireSeriesOK }
+            if ($rb1.Checked) { Log-Console "Script: Inventaire OK..."; $res = Run-InventaireSeriesOK }
+            elseif ($rb2.Checked) { Log-Console "Script: Recherche KO..."; $res = Run-RechercheSerie }
+            elseif ($rb3.Checked) { Log-Console "Script: Inventaire..."; $res = Run-InventaireSeries }
             elseif ($rb4.Checked) { Log-Console "Script: Historique..."; $res = Run-HistoriqueTests }
         
             Log-Console $res
