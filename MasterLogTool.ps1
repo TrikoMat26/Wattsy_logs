@@ -170,7 +170,45 @@ Function Run-RechercheSerie {
         Write-ReportFile $fPath $content
         $cnt++
     }
-    return "Terminé. $cnt fichier(s) généré(s) pour $($targets.Count) cibles recherchées."
+    # Bilan : trouvés vs non trouvés
+    $notFound = @()
+    foreach ($t in $targets.Keys) {
+        if (-not $results.ContainsKey($t)) { $notFound += $t }
+    }
+    $notFound = $notFound | Sort-Object
+    $msg = "Termine. $cnt fichier(s) genere(s) sur $($targets.Count) SN recherche(s)."
+    if ($notFound.Count -gt 0) {
+        $msg += "`n$($notFound.Count) SN non trouve(s) dans les logs : " + ($notFound -join ", ")
+    }
+
+    # Ajout du bilan à la fin de Inventaire_Series_OK.txt
+    $okPath = Join-Path $ScriptPath "Inventaire_Series_OK.txt"
+    $bilanSb = [System.Text.StringBuilder]::new()
+    [void]$bilanSb.AppendLine()
+    [void]$bilanSb.AppendLine("#" * 80)
+    [void]$bilanSb.AppendLine("BILAN RECHERCHE SERIE KO (NumSerieKO.txt)")
+    [void]$bilanSb.AppendLine("Genere le : $(Get-Date)")
+    [void]$bilanSb.AppendLine("#" * 80)
+    [void]$bilanSb.AppendLine()
+    [void]$bilanSb.AppendLine("SN recherches : $($targets.Count)")
+    [void]$bilanSb.AppendLine("SN trouves (fichiers generes) : $cnt")
+    if ($notFound.Count -gt 0) {
+        [void]$bilanSb.AppendLine("SN non trouves ($($notFound.Count)) : " + ($notFound -join ", "))
+    }
+    else {
+        [void]$bilanSb.AppendLine("SN non trouves : 0 (tous trouves)")
+    }
+    [void]$bilanSb.AppendLine()
+
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    if (Test-Path -LiteralPath $okPath) {
+        [System.IO.File]::AppendAllText($okPath, $bilanSb.ToString(), $utf8NoBom)
+    }
+    else {
+        [System.IO.File]::WriteAllText($okPath, $bilanSb.ToString(), $utf8NoBom)
+    }
+
+    return $msg
 }
 
 
