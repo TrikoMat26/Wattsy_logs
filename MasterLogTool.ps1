@@ -87,18 +87,37 @@ Function Run-RechercheSerie {
     
     $results = @{} # Stockage en mémoire : Key=SN, Value=StringContent
     $counts = @{}  # Compteur d'occurrences
+    $faults = @{}  # Key=SN, Value=liste ordonnée des défauts (un par bloc/occurrence)
     
     $logs = Get-LogFiles
     $totalLogs = $logs.Count
     
+    # Scriptblock pour committer le défaut du bloc courant
+    $CommitFault = {
+        if ($currentSN -and $targets.ContainsKey($currentSN)) {
+            if (-not $faults.ContainsKey($currentSN)) { $faults[$currentSN] = @() }
+            if ($currentBlockFault) {
+                $faults[$currentSN] += $currentBlockFault
+            }
+            else {
+                $faults[$currentSN] += "Incomplet"
+            }
+        }
+    }
+
     foreach ($log in $logs) {
         $lines = [System.IO.File]::ReadLines($log.FullName, $EncANSI)
         $currentSN = ""
+        $currentBlockFault = ""
         
         foreach ($line in $lines) {
             $cleanLine = $line -replace "`0", ""
             
             if ($cleanLine.IndexOf("Datamatrix", [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                # Commit le défaut du bloc précédent
+                & $CommitFault
+                $currentBlockFault = ""
+
                 $sn = Extract-SN $cleanLine
                 if ($sn) {
                     if ($targets.ContainsKey($sn)) {
@@ -122,20 +141,38 @@ Function Run-RechercheSerie {
             }
             elseif ($currentSN) {
                 [void]$results[$currentSN].AppendLine($cleanLine)
+                # Détection du défaut : extraire les mots entre "[PROD_ERROR]: " et "fail"
+                if (-not $currentBlockFault -and $cleanLine -match '\[PROD_ERROR\]:\s*(.+?)\s+fail\s*$') {
+                    $currentBlockFault = $matches[1]
+                }
+                elseif (-not $currentBlockFault -and $cleanLine -match '\[PROD_ERROR\]:\s*(.+)$') {
+                    # Cas où "fail" n'est pas présent : prendre tout après le tag
+                    $currentBlockFault = $matches[1].Trim()
+                }
             }
         }
+        # Commit le défaut du dernier bloc du fichier
+        & $CommitFault
+        $currentBlockFault = ""
+        $currentSN = ""
     }
 
-    # Ecriture
+    # Ecriture avec noms enrichis des défauts
     $cnt = 0
     foreach ($sn in $results.Keys) {
-        $fPath = Join-Path $ScriptPath "$sn.txt"
+        # Construction du suffixe : _défaut1_défaut2_...
+        $faultSuffix = ""
+        if ($faults.ContainsKey($sn) -and $faults[$sn].Count -gt 0) {
+            $faultSuffix = "_" + ($faults[$sn] -join "_")
+        }
+        $fPath = Join-Path $ScriptPath "$sn$faultSuffix.txt"
         $content = Sanitize-Text $results[$sn].ToString()
         Write-ReportFile $fPath $content
         $cnt++
     }
     return "Terminé. $cnt fichier(s) généré(s) pour $($targets.Count) cibles recherchées."
 }
+
 
 # 2. INVENTAIRE SERIES
 Function Run-InventaireSeries {
@@ -349,9 +386,9 @@ Function Run-InventaireSeriesOK {
             }
             $segments += , $currentSeg
 
-            # Fonction locale de formatage avec zéros
-            # (pas de Function imbriquée pour compatibilité PS 5.1)
+            # Rendu par segment + collecte globale des manquants
             $segId = 0
+            $allMissingSN = @()
             foreach ($seg in $segments) {
                 $segId++
 
@@ -376,6 +413,7 @@ Function Run-InventaireSeriesOK {
                 for ($n = $segStart; $n -le $segEnd; $n++) {
                     if (-not $present.ContainsKey($n)) {
                         $missing += $n.ToString("D$segWidth")
+                        $allMissingSN += $n.ToString("D$segWidth")
                     }
                 }
 
@@ -403,7 +441,32 @@ Function Run-InventaireSeriesOK {
 
     $outPath = Join-Path $ScriptPath "Inventaire_Series_OK.txt"
     Write-ReportFile $outPath (Sanitize-Text $sb.ToString())
-    return "Terminé. Fichier généré : Inventaire_Series_OK.txt"
+
+    # --- Proposition d'export des manquants vers NumSerieKO.txt ---
+    if ($allMissingSN -and $allMissingSN.Count -gt 0) {
+        $msgText = "$($allMissingSN.Count) numero(s) manquant(s) detecte(s) dans les segments :`n`n" + ($allMissingSN -join ", ") + "`n`nVoulez-vous les ajouter dans NumSerieKO.txt ?"
+        $answer = [System.Windows.Forms.MessageBox]::Show($msgText, "Numeros manquants", "YesNo", "Question")
+
+        if ($answer -eq "Yes") {
+            $koPath = Join-Path $ScriptPath "NumSerieKO.txt"
+            # Lire le contenu existant (ou vide si fichier inexistant)
+            $existingContent = ""
+            if (Test-Path -LiteralPath $koPath) {
+                $existingContent = (Get-Content -LiteralPath $koPath -Raw -ErrorAction SilentlyContinue)
+                if (-not $existingContent) { $existingContent = "" }
+            }
+            # Ajouter les manquants (un par ligne) à la suite
+            $newEntries = $allMissingSN -join "`r`n"
+            if ($existingContent.Length -gt 0 -and -not $existingContent.EndsWith("`n")) {
+                $newEntries = "`r`n" + $newEntries
+            }
+            $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+            [System.IO.File]::AppendAllText($koPath, $newEntries + "`r`n", $utf8NoBom)
+            return "Termine. Fichier genere : Inventaire_Series_OK.txt`n$($allMissingSN.Count) manquant(s) ajoute(s) dans NumSerieKO.txt."
+        }
+    }
+
+    return "Termine. Fichier genere : Inventaire_Series_OK.txt"
 }
 
 # 4. HISTORIQUE TESTS

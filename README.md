@@ -35,9 +35,9 @@ Plusieurs outils PowerShell sont disponibles, ainsi que les anciens scripts indi
 
 ### Fonctionnalités
 L'interface propose 4 actions :
-1.  **Extraction par Liste** : Extrait les logs complets pour les produits listés dans `NumSerieKO.txt`.
+1.  **Extraction par Liste** : Extrait les logs complets pour les produits listés dans `NumSerieKO.txt`. Le fichier généré est nommé `SN_défaut1_défaut2.txt` pour identifier les pannes en un coup d'œil.
 2.  **Inventaire Global** : Liste tous les numéros de série trouvés dans tous les logs.
-3.  **Inventaire Validés (OK)** : Liste les succès (`[PROD_OK]`), analyse les doublons, génère une **liste globale confondus** de tous les SN OK uniques, puis effectue une **analyse par segments (lots/OF)** avec détection des numéros manquants.
+3.  **Inventaire Validés (OK)** : Liste les succès (`[PROD_OK]`), analyse les doublons, génère une **liste globale confondus** de tous les SN OK uniques, puis effectue une **analyse par segments (lots/OF)** avec détection des numéros manquants. Propose d'ajouter les manquants dans `NumSerieKO.txt`.
 4.  **Historique Complet** : Trace tout l'historique de chaque produit (OK, Erreur précise, ou Incomplet).
 
 ### Utilisation-

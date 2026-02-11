@@ -48,6 +48,17 @@ Le script doit supporter **simultanément** les deux formats de logs existants :
 - **Priorité** : Si un bloc contient à la fois OK et ERROR (rare), ERROR prévaut généralement, ou l'ordre chronologique. Dans nos scripts : OK prévaut si présent, sauf si ERROR est explicite.
 - **Incomplet** : Si aucun marqueur n'est trouvé avant la fin du bloc.
 
+### Extraction du Défaut pour Nommage (Option 1 - Recherche KO)
+- **Source** : Ligne contenant `[PROD_ERROR]: ... fail` dans chaque bloc.
+- **Regex** : `\[PROD_ERROR\]:\s*(.+?)\s+fail\s*$` → capturer les mots entre `[PROD_ERROR]: ` et `fail`.
+- **Fallback** : Si pas de `fail` → prendre tout après `[PROD_ERROR]: `. Si aucune ligne `[PROD_ERROR]:` → défaut = `Incomplet`.
+- **Nommage fichier** : `SN_défaut1_défaut2_défaut3.txt` (un défaut par occurrence, dans l'ordre, non dédupliqué).
+- **Exemples** : `043458_CP signal_CP signal_CP signal.txt`, `043491_LTE_LTE_LTE_LTE.txt`.
+
+### Export des Manquants vers NumSerieKO.txt (Option 3 - Inventaire OK)
+- Après la segmentation par lots, si des numéros manquants sont détectés, proposer via MessageBox de les ajouter dans `NumSerieKO.txt`.
+- Le fichier est créé s'il n'existe pas, sinon les numéros sont ajoutés à la suite (un par ligne, UTF-8 sans BOM).
+
 ## 6. Historique des Bugs Résolus (Analyse)
 
 | Erreur | Contexte | Solution |
