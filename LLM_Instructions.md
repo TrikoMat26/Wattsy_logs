@@ -128,7 +128,37 @@ segment 1 : 043355–043544, present=188, missing=2 (043458, 043491)
 segment 2 : 099001–099010, present=10, missing=0
 ```
 
-### Pièges PowerShell 5.1 Connus
+## 10. Gestion des Ordres de Fabrication (OF)
+
+Intégrée dans `MasterLogTool.ps1` (Option 5), cette fonctionnalité permet d'associer des numéros de série à des OF (7 chiffres).
+
+### Stockage (`OF_Registry.json`)
+- **Format** : JSON (Dictionnaire ordonné)
+- **Clé** : Numéro d'OF (string, 7 chiffres)
+- **Valeur** : Tableau de SN (strings)
+- **Encodage** : UTF-8 sans BOM
+
+**Exemple :**
+```json
+{
+  "1234567": ["043355", "043356"],
+  "9876543": ["044100", "044101"]
+}
+```
+
+### Règles Métier
+- **Unicité** : Un SN ne peut appartenir qu'à un seul OF.
+- **Validation** : OF = 7 chiffres obligatoires. SN = chiffres uniquement.
+- **Saisie** : Supporte l'ajout par plage (ex: `043590 - 043600`).
+- **Persistance** : Sauvegarde automatique à chaque modification.
+
+### Fonctions Utilitaires (API Interne)
+- `Get-OFRegistry` : Charge le JSON en mémoire.
+- `Save-OFRegistry($reg)` : Sauvegarde le JSON trié.
+- `Find-OFBySN($reg, $sn)` : Retourne l'OF propriétaire d'un SN (ou `$null`).
+- `Expand-SNRange($txt)` : Convertit une entrée (unique ou plage) en liste de SN.
+
+## 11. Pièges PowerShell 5.1 Connus
 - Un tableau non vide dans un `if` est évalué `True` même si son contenu est `$false`.
 - `HashSet.ToArray()` peut échouer si la variable est écrasée en scalaire → préférer les hashtables.
 - Toujours forcer `,` (opérateur virgule) pour ajouter un sous-tableau à un tableau : `$segments += ,$current`.

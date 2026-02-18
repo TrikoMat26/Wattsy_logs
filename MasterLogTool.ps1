@@ -73,6 +73,72 @@ Function Write-ReportFile($path, $content) {
     }
 }
 
+# --- GESTION OF (Ordres de Fabrication) ---
+
+$OFRegistryPath = Join-Path $ScriptPath "OF_Registry.json"
+
+Function Get-OFRegistry {
+    if (Test-Path -LiteralPath $OFRegistryPath) {
+        try {
+            $json = Get-Content -LiteralPath $OFRegistryPath -Raw -Encoding UTF8
+            if (-not $json -or $json.Trim().Length -eq 0) { return [ordered]@{} }
+            $obj = $json | ConvertFrom-Json
+            $reg = [ordered]@{}
+            foreach ($prop in $obj.PSObject.Properties) {
+                $reg[$prop.Name] = @($prop.Value)
+            }
+            return $reg
+        }
+        catch {
+            [System.Windows.Forms.MessageBox]::Show("Erreur lecture OF_Registry.json :`n$($_.Exception.Message)", "Erreur", "OK", "Error")
+            return [ordered]@{}
+        }
+    }
+    return [ordered]@{}
+}
+
+Function Save-OFRegistry($registry) {
+    try {
+        # Trier les clés (OF) pour lisibilité
+        $sorted = [ordered]@{}
+        foreach ($k in ($registry.Keys | Sort-Object)) {
+            $sorted[$k] = @($registry[$k] | Sort-Object)
+        }
+        $json = $sorted | ConvertTo-Json -Depth 3
+        $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+        [System.IO.File]::WriteAllText($OFRegistryPath, $json, $utf8NoBom)
+    }
+    catch {
+        [System.Windows.Forms.MessageBox]::Show("Erreur sauvegarde OF_Registry.json :`n$($_.Exception.Message)", "Erreur", "OK", "Error")
+    }
+}
+
+Function Find-OFBySN($registry, $sn) {
+    foreach ($of in $registry.Keys) {
+        if ($registry[$of] -contains $sn) { return $of }
+    }
+    return $null
+}
+
+Function Expand-SNRange($inputText) {
+    $inputText = $inputText.Trim()
+    if ($inputText -match '^\s*(\d+)\s*-\s*(\d+)\s*$') {
+        $startNum = [int]$matches[1]
+        $endNum = [int]$matches[2]
+        if ($startNum -gt $endNum) { return $null }
+        $width = $matches[1].Length
+        $result = @()
+        for ($i = $startNum; $i -le $endNum; $i++) {
+            $result += $i.ToString("D$width")
+        }
+        return $result
+    }
+    elseif ($inputText -match '^\d+$') {
+        return @($inputText)
+    }
+    return $null
+}
+
 # --- LOGIQUE MÉTIER (LES 4 SCRIPTS RECODÉS) ---
 
 # 1. RECHERCHE SERIE KO
@@ -578,6 +644,269 @@ Function Run-HistoriqueTests {
 }
 
 
+# 5. GESTION DES OF (INTERFACE DÉDIÉE)
+Function Show-OFManager {
+    $global:OF_Form = New-Object Windows.Forms.Form
+    $global:OF_Form.Text = "Gestion des Ordres de Fabrication (OF)"
+    $global:OF_Form.Size = New-Object Drawing.Size(600, 500)
+    $global:OF_Form.StartPosition = "CenterScreen"
+    $global:OF_Form.FormBorderStyle = "FixedDialog"
+    $global:OF_Form.MaximizeBox = $false
+
+    # Layout principal
+    $mainTable = New-Object Windows.Forms.TableLayoutPanel
+    $mainTable.Dock = "Fill"
+    $mainTable.ColumnCount = 2
+    $mainTable.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle([Windows.Forms.SizeType]::Percent, 40)))
+    $mainTable.ColumnStyles.Add((New-Object Windows.Forms.ColumnStyle([Windows.Forms.SizeType]::Percent, 60)))
+    $global:OF_Form.Controls.Add($mainTable)
+
+    # --- COLONNE GAUCHE (LISTE OF) ---
+    $panelLeft = New-Object Windows.Forms.FlowLayoutPanel
+    $panelLeft.Dock = "Fill"
+    $panelLeft.FlowDirection = "TopDown"
+    $mainTable.Controls.Add($panelLeft, 0, 0)
+
+    $lblOF = New-Object Windows.Forms.Label; $lblOF.Text = "OF Existants :"; $lblOF.AutoSize = $true
+    $panelLeft.Controls.Add($lblOF)
+
+    $global:OF_lstOF = New-Object Windows.Forms.ListBox; $global:OF_lstOF.Width = 200; $global:OF_lstOF.Height = 300
+    $panelLeft.Controls.Add($global:OF_lstOF)
+
+    $global:OF_txtNewOF = New-Object Windows.Forms.TextBox; $global:OF_txtNewOF.Width = 200; $global:OF_txtNewOF.MaxLength = 7
+    $panelLeft.Controls.Add($global:OF_txtNewOF)
+
+    $global:OF_btnAddOF = New-Object Windows.Forms.Button; $global:OF_btnAddOF.Text = "Ajouter OF"; $global:OF_btnAddOF.Width = 200
+    $panelLeft.Controls.Add($global:OF_btnAddOF)
+
+    $global:OF_btnDelOF = New-Object Windows.Forms.Button; $global:OF_btnDelOF.Text = "Supprimer OF"; $global:OF_btnDelOF.Width = 200
+    $panelLeft.Controls.Add($global:OF_btnDelOF)
+
+    # --- COLONNE DROITE (LISTE SN) ---
+    $global:OF_panelRight = New-Object Windows.Forms.FlowLayoutPanel
+    $global:OF_panelRight.Dock = "Fill"
+    $global:OF_panelRight.FlowDirection = "TopDown"
+    $mainTable.Controls.Add($global:OF_panelRight, 1, 0)
+
+    $lblSN = New-Object Windows.Forms.Label; $lblSN.Text = "SN pour OF sélectionné :"; $lblSN.AutoSize = $true
+    $global:OF_panelRight.Controls.Add($lblSN)
+
+    $global:OF_lstSN = New-Object Windows.Forms.ListBox; $global:OF_lstSN.Width = 320; $global:OF_lstSN.Height = 300
+    $global:OF_panelRight.Controls.Add($global:OF_lstSN)
+
+    $lblAddSN = New-Object Windows.Forms.Label; $lblAddSN.Text = "Ajout SN (ex: 043590 ou 043590-043600) :"; $lblAddSN.AutoSize = $true
+    $global:OF_panelRight.Controls.Add($lblAddSN)
+
+    $global:OF_txtNewSN = New-Object Windows.Forms.TextBox; $global:OF_txtNewSN.Width = 320
+    $global:OF_panelRight.Controls.Add($global:OF_txtNewSN)
+
+    $flowBtns = New-Object Windows.Forms.FlowLayoutPanel; $flowBtns.AutoSize = $true
+    $global:OF_btnAddSN = New-Object Windows.Forms.Button; $global:OF_btnAddSN.Text = "Ajouter SN"; $global:OF_btnAddSN.Width = 150
+    $global:OF_btnDelSN = New-Object Windows.Forms.Button; $global:OF_btnDelSN.Text = "Supprimer SN"; $global:OF_btnDelSN.Width = 150
+    $flowBtns.Controls.Add($global:OF_btnAddSN)
+    $flowBtns.Controls.Add($global:OF_btnDelSN)
+    $global:OF_panelRight.Controls.Add($flowBtns)
+
+    $global:OF_lblStatus = New-Object Windows.Forms.Label; $global:OF_lblStatus.Text = ""; $global:OF_lblStatus.AutoSize = $true; $global:OF_lblStatus.ForeColor = "Blue"
+    $global:OF_panelRight.Controls.Add($global:OF_lblStatus)
+
+    # --- LOGIQUE ---
+    $global:currentRegistry = Get-OFRegistry
+
+    # Helper pour extraire le numéro d'OF de la liste (format "1234567 (12)")
+    # Helper pour extraire le numéro d'OF de la liste (format "1234567 (12)")
+    $global:OF_GetSelectedOFNumber = {
+        if ($global:OF_lstOF.SelectedItem) {
+            return ($global:OF_lstOF.SelectedItem -split ' ')[0]
+        }
+        return $null
+    }
+
+    # Logic Functions
+    $global:OF_RefreshSNList = {
+        $selOF = & $global:OF_GetSelectedOFNumber
+        $global:OF_lstSN.Items.Clear()
+        if ($selOF) {
+            $count = 0
+            if ($global:currentRegistry.Contains($selOF)) {
+                foreach ($s in ($global:currentRegistry[$selOF] | Sort-Object)) { [void]$global:OF_lstSN.Items.Add($s); $count++ }
+            }
+            $global:OF_lblStatus.Text = "$count SN dans l'OF $selOF"
+            $global:OF_txtNewOF.Text = ""
+            $global:OF_panelRight.Enabled = $true
+        }
+        else {
+            $global:OF_lblStatus.Text = "Sélectionnez un OF"
+            $global:OF_panelRight.Enabled = $false
+        }
+    }
+
+    $global:OF_RefreshOFList = {
+        $selOF = & $global:OF_GetSelectedOFNumber
+        $global:OF_lstOF.Items.Clear()
+        
+        # Rebuild list with counts
+        foreach ($k in $global:currentRegistry.Keys) { 
+            $cnt = 0
+            if ($global:currentRegistry[$k]) { $cnt = $global:currentRegistry[$k].Count }
+            [void]$global:OF_lstOF.Items.Add("$k ($cnt)") 
+        }
+
+        # Restore selection
+        if ($selOF) {
+            $idx = $global:OF_lstOF.FindString($selOF)
+            if ($idx -ge 0) { $global:OF_lstOF.SelectedIndex = $idx }
+        }
+        
+        # Trigger SN update
+        & $global:OF_RefreshSNList
+    }
+
+    # Events
+    $global:OF_lstOF.Add_SelectedIndexChanged({ & $global:OF_RefreshSNList })
+
+    $global:OF_lstOF.Add_DoubleClick({ 
+            $sel = & $global:OF_GetSelectedOFNumber 
+            if ($sel) { 
+                $global:OF_txtNewOF.Text = $sel 
+                $global:OF_txtNewOF.Focus()
+                $global:OF_txtNewOF.SelectionStart = $global:OF_txtNewOF.Text.Length
+                $global:OF_txtNewOF.SelectionLength = 0
+            }
+        })
+
+    $global:OF_lstSN.Add_DoubleClick({ 
+            if ($global:OF_lstSN.SelectedItem) { 
+                $global:OF_txtNewSN.Text = $global:OF_lstSN.SelectedItem 
+                $global:OF_txtNewSN.Focus()
+                $global:OF_txtNewSN.SelectionStart = $global:OF_txtNewSN.Text.Length
+                $global:OF_txtNewSN.SelectionLength = 0
+            }
+        })
+
+    # Enter Key Events
+    $global:OF_txtNewOF.Add_KeyDown({ 
+            param($sender, $e) 
+            if ($e.KeyCode -eq 'Enter') { 
+                $e.SuppressKeyPress = $true
+                $global:OF_btnAddOF.PerformClick()
+            } 
+        })
+
+    $global:OF_txtNewSN.Add_KeyDown({ 
+            param($sender, $e) 
+            if ($e.KeyCode -eq 'Enter') { 
+                $e.SuppressKeyPress = $true
+                $global:OF_btnAddSN.PerformClick()
+            } 
+        })
+
+    $global:OF_btnAddOF.Add_Click({
+            $newOF = $global:OF_txtNewOF.Text.Trim()
+            if ($newOF -match '^\d{7}$') {
+                if (-not $global:currentRegistry.Contains($newOF)) {
+                    $global:currentRegistry[$newOF] = @()
+                    Save-OFRegistry $global:currentRegistry
+                    & $global:OF_RefreshOFList
+                    # Select new item matches the new OF
+                    $idx = $global:OF_lstOF.FindString($newOF)
+                    if ($idx -ge 0) { $global:OF_lstOF.SelectedIndex = $idx }
+                }
+                else { [System.Windows.Forms.MessageBox]::Show("Cet OF existe déjà.", "Erreur") }
+            }
+            else { [System.Windows.Forms.MessageBox]::Show("Le numéro d'OF doit comporter exactement 7 chiffres.", "Format invalide") }
+        })
+
+    $global:OF_btnDelOF.Add_Click({
+            $selOF = & $global:OF_GetSelectedOFNumber
+            if ($selOF) {
+                $res = [System.Windows.Forms.MessageBox]::Show("Supprimer l'OF $selOF et tous ses SN ?", "Confirmation", "YesNo", "Warning")
+                if ($res -eq "Yes") {
+                    $global:currentRegistry.Remove($selOF)
+                    Save-OFRegistry $global:currentRegistry
+                    & $global:OF_RefreshOFList
+                }
+            }
+        })
+
+    $global:OF_btnAddSN.Add_Click({
+            $selOF = & $global:OF_GetSelectedOFNumber
+            if ($selOF) {
+                $inputSN = $global:OF_txtNewSN.Text
+                $snList = Expand-SNRange $inputSN
+                if ($snList -and $snList.Count -gt 0) {
+                    # Vérifier conflits
+                    $conflicts = @()
+                    foreach ($s in $snList) {
+                        $existingOF = Find-OFBySN $global:currentRegistry $s
+                        if ($existingOF -and $existingOF -ne $selOF) {
+                            $conflicts += "$s (dans OF $existingOF)"
+                        }
+                    }
+
+                    if ($conflicts.Count -gt 0) {
+                        [System.Windows.Forms.MessageBox]::Show("Impossible d'ajouter, SN déjà assignés :`n" + ($conflicts -join "`n"), "Conflit SN")
+                    }
+                    else {
+                        $currentList = $global:currentRegistry[$selOF]
+                        $addedCount = 0
+                        foreach ($s in $snList) {
+                            if ($currentList -notcontains $s) {
+                                $global:currentRegistry[$selOF] += $s
+                                $addedCount++
+                            }
+                        }
+                        if ($addedCount -gt 0) {
+                            Save-OFRegistry $global:currentRegistry
+                            $global:OF_txtNewSN.Text = ""
+                            # Refresh OF list to update count in title, which also refreshes SN list
+                            & $global:OF_RefreshOFList 
+                            $global:OF_lblStatus.Text = "$addedCount SN ajoutés à l'OF $selOF"
+                        }
+                        else {
+                            $global:OF_lblStatus.Text = "Ces SN sont déjà dans l'OF."
+                        }
+                    }
+                }
+                else { [System.Windows.Forms.MessageBox]::Show("Format invalide.`nUtilisez 'XXXXXX' ou 'XXXXXX-YYYYYY'.", "Erreur") }
+            }
+        })
+
+    $global:OF_btnDelSN.Add_Click({
+            $selOF = & $global:OF_GetSelectedOFNumber
+            $inputSN = $global:OF_txtNewSN.Text
+            # Si un SN est sélectionné dans la liste et input vide -> supprimer la sélection
+            if (-not $inputSN -and $global:OF_lstSN.SelectedItem) {
+                $toDel = $global:OF_lstSN.SelectedItem
+                $global:currentRegistry[$selOF] = @($global:currentRegistry[$selOF] | Where-Object { $_ -ne $toDel })
+                Save-OFRegistry $global:currentRegistry
+                & $global:OF_RefreshOFList # Update Count
+            }
+            elseif ($inputSN) {
+                # Sinon essayer de supprimer via l'input (supporte ranges)
+                $snList = Expand-SNRange $inputSN
+                if ($snList) {
+                    $before = $global:currentRegistry[$selOF].Count
+                    $global:currentRegistry[$selOF] = @($global:currentRegistry[$selOF] | Where-Object { $snList -notcontains $_ })
+                    $after = $global:currentRegistry[$selOF].Count
+                    if ($before -ne $after) {
+                        Save-OFRegistry $global:currentRegistry
+                        $global:OF_txtNewSN.Text = ""
+                        & $global:OF_RefreshOFList # Update Count
+                        $global:OF_lblStatus.Text = "$($before - $after) SN supprimés."
+                    }
+                    else { $global:OF_lblStatus.Text = "Aucun SN correspondant trouvé dans cet OF." }
+                }
+            }
+            else { [System.Windows.Forms.MessageBox]::Show("Sélectionnez un SN dans la liste ou saisissez une plage à supprimer.", "Info") }
+        })
+
+    # Initial Init
+    & $global:OF_RefreshOFList
+    $global:OF_Form.Show() # Non-modal
+}
+
+
 # --- INTERFACE GRAPHIQUE (WINFORMS) ---
 
 $Form = New-Object Windows.Forms.Form
@@ -635,6 +964,12 @@ $rb4.Text = "4. Historique Complet (Traçabilité)"
 $rb4.AutoSize = $true
 $rb4.Tag = "Desc: Trace chronologiquement tous les passages de chaque SN. Indique si OK, Erreur précise ou Incomplet."
 $PanelLeft.Controls.Add($rb4)
+
+$rb5 = New-Object Windows.Forms.RadioButton
+$rb5.Text = "5. Gestion des OF (Ordres de Fabrication)"
+$rb5.AutoSize = $true
+$rb5.Tag = "Desc: Déclare et gestion des OF et de leurs SN associés. Les données sont sauvegardées dans OF_Registry.json."
+$PanelLeft.Controls.Add($rb5)
 
 $descBox = New-Object Windows.Forms.Label
 $descBox.Text = $rb1.Tag
@@ -705,7 +1040,9 @@ $Table.Controls.Add($txtLog, 0, 1)
 $rb1.Add_CheckedChanged({ if ($rb1.Checked) { $descBox.Text = $rb1.Tag } })
 $rb2.Add_CheckedChanged({ if ($rb2.Checked) { $descBox.Text = $rb2.Tag } })
 $rb3.Add_CheckedChanged({ if ($rb3.Checked) { $descBox.Text = $rb3.Tag } })
+$rb3.Add_CheckedChanged({ if ($rb3.Checked) { $descBox.Text = $rb3.Tag } })
 $rb4.Add_CheckedChanged({ if ($rb4.Checked) { $descBox.Text = $rb4.Tag } })
+$rb5.Add_CheckedChanged({ if ($rb5.Checked) { $descBox.Text = $rb5.Tag } })
 
 # Fonction Refresh liste fichiers
 $RefreshFiles = {
@@ -737,6 +1074,11 @@ $btnRun.Add_Click({
             elseif ($rb2.Checked) { Log-Console "Script: Recherche KO..."; $res = Run-RechercheSerie }
             elseif ($rb3.Checked) { Log-Console "Script: Inventaire..."; $res = Run-InventaireSeries }
             elseif ($rb4.Checked) { Log-Console "Script: Historique..."; $res = Run-HistoriqueTests }
+            elseif ($rb5.Checked) { 
+                Log-Console "Ouverture du gestionnaire d'OF..."
+                Show-OFManager 
+                $res = "Fenêtre de gestion fermée."
+            }
         
             Log-Console $res
         }

@@ -39,6 +39,7 @@ L'interface propose 4 actions :
 2.  **Inventaire Global** : Liste tous les numéros de série trouvés dans tous les logs.
 3.  **Inventaire Validés (OK)** : Liste les succès (`[PROD_OK]`), analyse les doublons, génère une **liste globale confondus** de tous les SN OK uniques, puis effectue une **analyse par segments (lots/OF)** avec détection des numéros manquants. Propose d'ajouter les manquants dans `NumSerieKO.txt`.
 4.  **Historique Complet** : Trace tout l'historique de chaque produit (OK, Erreur précise, ou Incomplet).
+5.  **Gestion des OF** : Interface dédiée pour associer des numéros de série à des OF (7 chiffres). Permet de déclarer des plages de SN et sauvegarde les données pour usage ultérieur (`OF_Registry.json`).
 
 ### Utilisation-
 1.  Faire un clic droit sur `MasterLogTool.ps1`.
