@@ -121,18 +121,41 @@ Function Find-OFBySN($registry, $sn) {
 }
 
 Function Expand-SNRange($inputText) {
+    if ([string]::IsNullOrWhiteSpace($inputText)) { return $null }
     $inputText = $inputText.Trim()
+
+    # 1. Liste séparée par des virgules (CSV)
+    if ($inputText.Contains(',')) {
+        $parts = $inputText -split ','
+        $results = @()
+        foreach ($p in $parts) {
+            $clean = $p.Trim()
+            if ($clean -match '^\d+$') {
+                $results += $clean
+            }
+            else {
+                # Si un élément n'est pas un nombre, on considère l'entrée invalide
+                return $null 
+            }
+        }
+        return $results
+    }
+    
+    # 2. Plage (ex: 043590 - 043600)
     if ($inputText -match '^\s*(\d+)\s*-\s*(\d+)\s*$') {
         $startNum = [int]$matches[1]
         $endNum = [int]$matches[2]
         if ($startNum -gt $endNum) { return $null }
         $width = $matches[1].Length
+        # Correction: utiliser le formatage correct basé sur la longueur de la chaîne originale
+        $formatStr = "{0:D$width}"
         $result = @()
         for ($i = $startNum; $i -le $endNum; $i++) {
-            $result += $i.ToString("D$width")
+            $result += $formatStr -f $i
         }
         return $result
     }
+    # 3. Unitaire (ex: 043590)
     elseif ($inputText -match '^\d+$') {
         return @($inputText)
     }
