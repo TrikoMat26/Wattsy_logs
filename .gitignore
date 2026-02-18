@@ -1,6 +1,7 @@
 # Logs sources
 ELISA_Prod_Log*.txt
 Archive/
+gcm-diagnose.log
 
 # Résultats générés
 Inventaire_*.txt

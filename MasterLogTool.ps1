@@ -435,15 +435,34 @@ Function Run-InventaireSeriesOK {
     # Section Liste Globale Confondus
     [void]$sb.AppendLine()
     [void]$sb.AppendLine("#" * 80)
-    [void]$sb.AppendLine("LISTE GLOBALE DES SN OK (CONFONDUS - TOUS FICHIERS)")
+    [void]$sb.AppendLine("LISTE GLOBALE DES SN OK (GROUPES PAR OF)")
     [void]$sb.AppendLine("#" * 80)
     [void]$sb.AppendLine()
     
     $allUniqueSN = $globalOverview.Keys | Sort-Object
     [void]$sb.AppendLine("Nombre total de SN uniques OK : $($allUniqueSN.Count)")
     [void]$sb.AppendLine()
-    [void]$sb.AppendLine("Liste triée par ordre croissant :")
-    [void]$sb.AppendLine(($allUniqueSN -join ", "))
+    
+    # Groupement par OF
+    $ofRegistry = Get-OFRegistry
+    $snByOF = @{}
+    $unknownKey = "OF A DETERMINER"
+    
+    foreach ($sn in $allUniqueSN) {
+        $of = Find-OFBySN $ofRegistry $sn
+        if (-not $of) { $of = $unknownKey }
+        
+        if (-not $snByOF.ContainsKey($of)) { $snByOF[$of] = [System.Collections.Generic.List[string]]::new() }
+        [void]$snByOF[$of].Add($sn)
+    }
+    
+    # Affichage
+    foreach ($k in ($snByOF.Keys | Sort-Object)) {
+        [void]$sb.AppendLine("OF : $k ($($snByOF[$k].Count) SN)")
+        [void]$sb.AppendLine("-" * 40)
+        [void]$sb.AppendLine(($snByOF[$k] -join ", "))
+        [void]$sb.AppendLine()
+    }
     [void]$sb.AppendLine()
 
     # --- SEGMENTATION PAR LOTS / OF (issue de Liste_OF.ps1) ---
