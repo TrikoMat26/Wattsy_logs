@@ -712,7 +712,20 @@ Function Show-OFManager {
     $lblOF = New-Object Windows.Forms.Label; $lblOF.Text = "OF Existants :"; $lblOF.AutoSize = $true
     $panelLeft.Controls.Add($lblOF)
 
-    $global:OF_lstOF = New-Object Windows.Forms.ListBox; $global:OF_lstOF.Width = 200; $global:OF_lstOF.Height = 300
+    $lblSearch = New-Object Windows.Forms.Label; $lblSearch.Text = "Recherche OF via SN :"; $lblSearch.AutoSize = $true
+    $panelLeft.Controls.Add($lblSearch)
+
+    $searchFlow = New-Object Windows.Forms.FlowLayoutPanel; $searchFlow.AutoSize = $true
+    $global:OF_txtSearchSN = New-Object Windows.Forms.TextBox; $global:OF_txtSearchSN.Width = 110
+    $global:OF_btnSearch = New-Object Windows.Forms.Button; $global:OF_btnSearch.Text = "Chercher"; $global:OF_btnSearch.Width = 80
+    $searchFlow.Controls.Add($global:OF_txtSearchSN)
+    $searchFlow.Controls.Add($global:OF_btnSearch)
+    $panelLeft.Controls.Add($searchFlow)
+    
+    $sep = New-Object Windows.Forms.Label; $sep.Text = "-------------------------"; $sep.AutoSize = $true
+    $panelLeft.Controls.Add($sep)
+
+    $global:OF_lstOF = New-Object Windows.Forms.ListBox; $global:OF_lstOF.Width = 200; $global:OF_lstOF.Height = 250
     $panelLeft.Controls.Add($global:OF_lstOF)
 
     $global:OF_txtNewOF = New-Object Windows.Forms.TextBox; $global:OF_txtNewOF.Width = 200; $global:OF_txtNewOF.MaxLength = 7
@@ -941,6 +954,44 @@ Function Show-OFManager {
                 }
             }
             else { [System.Windows.Forms.MessageBox]::Show("Sélectionnez un SN dans la liste ou saisissez une plage à supprimer.", "Info") }
+        })
+
+    # Search Events
+    $global:OF_btnSearch.Add_Click({
+            $snToFind = $global:OF_txtSearchSN.Text.Trim()
+            if ($snToFind) {
+                $foundOF = Find-OFBySN $global:currentRegistry $snToFind
+                if ($foundOF) {
+                    $idx = $global:OF_lstOF.FindString($foundOF) 
+                    if ($idx -ge 0) {
+                        $global:OF_lstOF.SelectedIndex = $idx
+                     
+                        # Sélectionner le SN dans la liste de droite
+                        $snIdx = $global:OF_lstSN.FindString($snToFind)
+                        if ($snIdx -ge 0) {
+                            $global:OF_lstSN.SelectedIndex = $snIdx
+                            $global:OF_lstSN.Focus() # Focus sur la liste des SN
+                        }
+                     
+                        # On garde le texte de recherche (demande utilisateur)
+                        # $global:OF_txtSearchSN.Text = "" 
+                     
+                        $global:OF_lblStatus.Text = "OF $foundOF trouvé pour le SN $snToFind"
+                    }
+                }
+                else {
+                    $global:OF_lblStatus.Text = "SN $snToFind non trouvé."
+                    [System.Windows.Forms.MessageBox]::Show("SN $snToFind non trouvé dans aucun OF.", "Résultat")
+                }
+            }
+        })
+
+    $global:OF_txtSearchSN.Add_KeyDown({
+            param($sender, $e)
+            if ($e.KeyCode -eq 'Enter') {
+                $e.SuppressKeyPress = $true
+                $global:OF_btnSearch.PerformClick()
+            }
         })
 
     # Initial Init
