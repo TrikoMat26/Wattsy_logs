@@ -1,4 +1,4 @@
-﻿<#
+<#
     MasterLogTool.ps1
     Outil regroupant les analyses de logs ELISA (Selha).
     
@@ -171,26 +171,37 @@ Function Run-RechercheSerie {
         return "ERREUR : Le fichier NumSerieKO.txt est introuvable."
     }
 
-    $targets = @{}
-    Get-Content $targetFile | ForEach-Object { $t = Clean-Serial $_; if ($t) { $targets[$t] = $true } }
+    $targets = @{} # Key: [int], Value: Original String (ex: "043785")
+    Get-Content $targetFile | ForEach-Object { 
+        $t = Clean-Serial $_
+        if ($t -and $t -match '^\d+$') { 
+            $targets[[int]$t] = $t 
+        } 
+    }
     
-    $results = @{} # Stockage en mémoire : Key=SN, Value=StringContent
+    $results = @{} # Stockage en mémoire : Key=SN (original string), Value=StringContent
     $counts = @{}  # Compteur d'occurrences
-    $faults = @{}  # Key=SN, Value=liste ordonnée des défauts (un par bloc/occurrence)
+    $faults = @{}  # Key=SN (original string), Value=liste ordonnée des défauts (un par bloc/occurrence)
     
     $logs = Get-LogFiles
     $totalLogs = $logs.Count
     
     # Scriptblock pour committer le défaut du bloc courant
     $CommitFault = {
-        if ($currentSN -and $targets.ContainsKey($currentSN)) {
-            if (-not $faults.ContainsKey($currentSN)) { $faults[$currentSN] = @() }
-            if ($currentBlockFault) {
-                $faults[$currentSN] += $currentBlockFault
-            }
-            else {
-                $faults[$currentSN] += "Incomplet"
-            }
+        if ($currentSN) {
+            try {
+                $currentSNInt = [int]$currentSN
+                if ($targets.ContainsKey($currentSNInt)) {
+                    $targetSN = $targets[$currentSNInt]
+                    if (-not $faults.ContainsKey($targetSN)) { $faults[$targetSN] = @() }
+                    if ($currentBlockFault) {
+                        $faults[$targetSN] += $currentBlockFault
+                    }
+                    else {
+                        $faults[$targetSN] += "Incomplet"
+                    }
+                }
+            } catch {}
         }
     }
 
@@ -208,17 +219,19 @@ Function Run-RechercheSerie {
                 $currentBlockFault = ""
 
                 $sn = Extract-SN $cleanLine
-                if ($sn) {
-                    if ($targets.ContainsKey($sn)) {
-                        $currentSN = $sn
-                        if (-not $counts.ContainsKey($sn)) { $counts[$sn] = 0; $results[$sn] = [System.Text.StringBuilder]::new() }
-                        $counts[$sn]++
+                if ($sn -and $sn -match '^\d+$') {
+                    $snInt = [int]$sn
+                    if ($targets.ContainsKey($snInt)) {
+                        $targetSN = $targets[$snInt]
+                        $currentSN = $targetSN
+                        if (-not $counts.ContainsKey($targetSN)) { $counts[$targetSN] = 0; $results[$targetSN] = [System.Text.StringBuilder]::new() }
+                        $counts[$targetSN]++
                         
                         # En-tête obligatoire (LLM rules)
-                        $sb = $results[$sn]
+                        $sb = $results[$targetSN]
                         if ($sb.Length -gt 0) { [void]$sb.AppendLine() }
                         [void]$sb.AppendLine("-" * 40)
-                        [void]$sb.AppendLine("Occurrence #$($counts[$sn]) (Fichier: $($log.Name))")
+                        [void]$sb.AppendLine("Occurrence #$($counts[$targetSN]) (Fichier: $($log.Name))")
                         [void]$sb.AppendLine("-" * 40)
                         [void]$sb.AppendLine($cleanLine)
                     }
@@ -261,7 +274,7 @@ Function Run-RechercheSerie {
     }
     # Bilan : trouvés vs non trouvés
     $notFound = @()
-    foreach ($t in $targets.Keys) {
+    foreach ($t in $targets.Values) {
         if (-not $results.ContainsKey($t)) { $notFound += $t }
     }
     $notFound = $notFound | Sort-Object

@@ -70,6 +70,7 @@ Le script doit supporter **simultanément** les deux formats de logs existants :
 | Bouton GUI caché | PowerShell | Désactiver le wrapping automatique (`WrapContents = $false`) |
 | Accents corrompus (◇) | PS écriture ANSI | Passer à UTF-8 sans BOM pour l'écriture |
 | "https" dans liste SN | URLs scannées | Regex `\d+` au lieu de `\w+` pour n'accepter que les chiffres |
+| SN non matché si écart de zéros (ex: 43785 vs 043785) | Recherche de pannes (Option 1) | Comparer les SN sous forme de `[int]` dans la hashtable, tout en préservant le format d'origine pour le nom du rapport |
 
 ## 7. Gestion et Automatisation (SFTP & RTC)
 
